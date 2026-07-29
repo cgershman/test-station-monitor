@@ -1,0 +1,4 @@
+<Solution>
+  <Project Path="TestStation.Cli/TestStation.Cli.csproj" />
+  <Project Path="TestStationMonitor/TestStationMonitor.csproj" />
+</Solution>
