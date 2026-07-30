@@ -17,7 +17,7 @@ public class TestStationViewModelTests
         // Act
         vm.RunTestCommand.Execute(null);
 
-        // Assert — the viewmodel should have sent exactly the RUN command
+        // The viewmodel should have sent exactly the RUN command
         CollectionAssert.Contains(fake.SentMessages, Commands.Run);
     }
 
@@ -28,10 +28,10 @@ public class TestStationViewModelTests
         var dispatcher = new InlineDispatcher();
         var vm = new TestStationViewModel("Station1", fake, dispatcher);
 
-        // Act — simulate the station reporting it started
+        // Simulate the station reporting it started
         fake.SimulateMessage(TestStationStatus.Running.ToString());
 
-        // Assert
+        // The status should be Running
         Assert.AreEqual(TestStationStatus.Running, vm.Status);
     }
 
@@ -42,8 +42,10 @@ public class TestStationViewModelTests
         var dispatcher = new InlineDispatcher();
         var vm = new TestStationViewModel("Station1", fake, dispatcher);
 
+        // Send passed result
         fake.SimulateMessage(TestStationStatus.Passed.ToString());
 
+        // Status should be passed
         Assert.AreEqual(TestStationStatus.Passed, vm.Status);
     }
 
@@ -57,7 +59,7 @@ public class TestStationViewModelTests
 
         fake.SimulateMessage("GARBAGE");
 
-        // Enum.TryParse fails on garbage → status should stay Disconnected
+        // Enum.TryParse fails on garbage. Status should stay Disconnected
         Assert.AreEqual(TestStationStatus.Disconnected, vm.Status);
     }
 }
