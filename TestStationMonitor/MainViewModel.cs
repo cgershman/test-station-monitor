@@ -10,7 +10,7 @@ public class MainViewModel : INotifyPropertyChanged
 {
     private IConnectionFactory _connectionFactory = new ConnectionFactory();
 
-    private string _statusMessage;
+    private string _statusMessage = string.Empty;
     public string StatusMessage
     {
         get => _statusMessage;
