@@ -1,5 +1,6 @@
 <Solution>
   <Project Path="TestStation.Cli/TestStation.Cli.csproj" />
   <Project Path="TestStation.Protocol/TestStation.Protocol.csproj" />
+  <Project Path="TestStation.Tests/TestStation.Tests.csproj" />
   <Project Path="TestStationMonitor/TestStationMonitor.csproj" />
 </Solution>

@@ -9,6 +9,7 @@ public class TestStationViewModel : INotifyPropertyChanged
 {
     private TestStationStatus _status = TestStationStatus.Disconnected;
     private IConnection _connection;
+    private IUiDispatcher _dispatcher;
 
     public string Endpoint { get; protected set; }
 
@@ -27,19 +28,23 @@ public class TestStationViewModel : INotifyPropertyChanged
 
     public ICommand RunTestCommand { get; }
 
-    public TestStationViewModel(string endpoint, IConnection connection)
+    public TestStationViewModel(string endpoint, IConnection connection, IUiDispatcher dispatcher)
     {
         Endpoint = endpoint;
-
         _connection = connection;
+        _dispatcher = dispatcher;
+
         _connection.MessageReceived += OnMessageReceived;
         _connection.Disconnected += OnDisconnected;
 
         RunTestCommand = new RelayCommand(RunTest, () => 
             Status != TestStationStatus.Running 
             && Status != TestStationStatus.Disconnected);
-        
-        GetStatus();
+    }
+
+    public async Task InitializeAsync()
+    {
+        await GetStatus();
     }
 
     public async void RunTest()
@@ -52,7 +57,7 @@ public class TestStationViewModel : INotifyPropertyChanged
 
     private void OnMessageReceived(string message)
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _dispatcher.Invoke(() =>
         {
             if (Enum.TryParse<TestStationStatus>(message, out var status))
                 Status = status;
@@ -63,7 +68,7 @@ public class TestStationViewModel : INotifyPropertyChanged
 
     private void OnDisconnected()
     {
-        App.Current.Dispatcher.Invoke(() =>
+        _dispatcher.Invoke(() =>
         {
             Status = TestStationStatus.Disconnected;
         });

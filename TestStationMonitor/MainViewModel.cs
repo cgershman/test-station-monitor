@@ -75,7 +75,10 @@ public class MainViewModel : INotifyPropertyChanged
            return; 
         }
         
-        TestStations.Add(new TestStationViewModel(endpoint, connection));
+        var dispatcher = new WpfDispatcher();
+        var testStation = new TestStationViewModel(endpoint, connection, dispatcher);
+        TestStations.Add(testStation);
+        await testStation.InitializeAsync();
         CommandManager.InvalidateRequerySuggested();
     }
 
