@@ -7,12 +7,12 @@
     xmlns:local="clr-namespace:TestStationMonitor"
     mc:Ignorable="d"
     d:DataContext="{d:DesignInstance local:TestStationViewModel}"
-    Height="50" Width="200" Background="LightBlue">
+    Height="50" Width="300" Background="LightBlue">
 
     <StackPanel Orientation="Horizontal">
-        <TextBlock Text="{Binding Name}" FontSize="16" VerticalAlignment="Center" Margin="10"/>
-        <Button Content="Run" Command="{Binding RunTestCommand}" Height="25" Width="60" Margin="10"/>
-        <TextBlock Text="{Binding Status}" Width="100" FontSize="16" VerticalAlignment="Center"/>
+        <TextBlock Text="{Binding Endpoint}" Width="100" FontSize="16" VerticalAlignment="Center" Margin="10"/>
+        <Button Content="Run" Command="{Binding RunTestCommand}" Height="25" Width="60" Margin="0,10,10,10"/>
+        <TextBlock Text="{Binding Status}" Width="100" FontSize="16" VerticalAlignment="Center" Margin="0,10,10,10"/>
     </StackPanel>
 
 </UserControl>

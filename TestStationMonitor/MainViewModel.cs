@@ -1,15 +1,40 @@
 using System.Collections.ObjectModel;
 using System.ComponentModel;
-using System.Net.NetworkInformation;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using TestStation.Protocol;
 
 namespace TestStationMonitor;
 
-public class MainViewModel
+public class MainViewModel : INotifyPropertyChanged
 {
-    private static int _tsCount = 0;
-    private bool _isRunningAll;
+    private string _statusMessage;
+    public string StatusMessage
+    {
+        get => _statusMessage;
+        set
+        {
+            if (_statusMessage != value)
+            {
+                _statusMessage = value;
+                OnPropertyChanged();
+            }
+        }
+    }
+
+    private string _newStationEndpoint = string.Empty;
+    public string NewStationEndpoint
+    {
+        get => _newStationEndpoint;
+        set 
+        { 
+            if (_newStationEndpoint != value)
+            {
+                _newStationEndpoint = value;
+                OnPropertyChanged();
+            } 
+        }
+    }
 
     public ObservableCollection<TestStationViewModel> TestStations { get; } = [];
 
@@ -19,37 +44,52 @@ public class MainViewModel
     public MainViewModel()
     {
         AddTestStationCommand = new RelayCommand(AddTestStation);
-        RunAllCommand = new RelayCommand(RunAll, () => TestStations.Count > 0 && !_isRunningAll);
+        RunAllCommand = new RelayCommand(RunAll, () => 
+            TestStations.Count > 0 
+            && !TestStations.All(ts => ts.Status == TestStationStatus.Running || ts.Status == TestStationStatus.Disconnected));
     }
 
-    private void AddTestStation()
+    private async void AddTestStation()
     {
-        _tsCount++;
-        TestStation testStation = new(_tsCount.ToString());
-        TestStations.Add(new TestStationViewModel(testStation));
+        var endpoint = NewStationEndpoint;
+        if (String.IsNullOrEmpty(endpoint))
+        {
+            StatusMessage = "Enter an endpoint to add a station.";
+            return;
+        }
+
+        var duplicates = TestStations.Where(ts => ts.Endpoint == endpoint);
+        if (duplicates.Count() > 0)
+        {
+            StatusMessage = "That station has already been added.";
+            return;
+        }
+
+        IConnection connection = new PipesConnection();
+        bool connected = await connection.ConnectAsync(endpoint);
+        if (!connected)
+        {
+           StatusMessage = "Could not connect to endpoint.";
+           return; 
+        }
+        
+        TestStations.Add(new TestStationViewModel(endpoint, connection));
         CommandManager.InvalidateRequerySuggested();
     }
 
     private async void RunAll()
     {
-        _isRunningAll = true;
-        CommandManager.InvalidateRequerySuggested();
-
         try {
             foreach(TestStationViewModel ts in TestStations)
                 ts.RunTest();
-            
-            var allRunning = TestStations
-                .Select(s => s.CurrentRun)
-                .Where(t => t != null)
-                .Cast<Task>();
-        
-            await Task.WhenAll(allRunning);
         }
         finally
         {
-            _isRunningAll = false;
             CommandManager.InvalidateRequerySuggested();
         }
     }
+
+    public event PropertyChangedEventHandler? PropertyChanged;
+    private void OnPropertyChanged([CallerMemberName] string? name = null)
+        => PropertyChanged?.Invoke(this, new PropertyChangedEventArgs(name));
 }

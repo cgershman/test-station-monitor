@@ -1,24 +1,23 @@
 using System.ComponentModel;
 using System.Runtime.CompilerServices;
 using System.Windows.Input;
+using TestStation.Protocol;
 
 namespace TestStationMonitor;
 
 public class TestStationViewModel : INotifyPropertyChanged
 {
-    private readonly TestStation _testStation;
+    private TestStationStatus _status = TestStationStatus.Disconnected;
+    private IConnection _connection;
 
-    public string Name
-    {
-        get => _testStation.Name;
-    }
+    public string Endpoint { get; protected set; }
 
     public TestStationStatus Status
     {
-        get => _testStation.Status;
+        get => _status;
         set 
         { 
-            _testStation.Status = value; 
+            _status = value; 
             OnPropertyChanged();
             CommandManager.InvalidateRequerySuggested();
         }
@@ -28,26 +27,51 @@ public class TestStationViewModel : INotifyPropertyChanged
 
     public ICommand RunTestCommand { get; }
 
-    public TestStationViewModel(TestStation testStation)
+    public TestStationViewModel(string endpoint, IConnection connection)
     {
-        _testStation = testStation;
-        RunTestCommand = new RelayCommand(RunTest, () => Status != TestStationStatus.Running);
+        Endpoint = endpoint;
+
+        _connection = connection;
+        _connection.MessageReceived += OnMessageReceived;
+        _connection.Disconnected += OnDisconnected;
+
+        RunTestCommand = new RelayCommand(RunTest, () => 
+            Status != TestStationStatus.Running 
+            && Status != TestStationStatus.Disconnected);
+        
+        GetStatus();
     }
 
-    public void RunTest()
+    public async void RunTest()
     {
         if (Status == TestStationStatus.Running)
             return;
 
-        CurrentRun = RunTestAsync();
+        await _connection.SendAsync(Commands.Run);
     }
 
-    private async Task RunTestAsync()
+    private void OnMessageReceived(string message)
     {
-        Status = TestStationStatus.Running;
-        await Task.Delay(Random.Shared.Next(9000) + 1000);
-        bool success = Random.Shared.Next(2) == 0; 
-        Status = success ? TestStationStatus.Passed : TestStationStatus.Failed;
+        App.Current.Dispatcher.Invoke(() =>
+        {
+            if (Enum.TryParse<TestStationStatus>(message, out var status))
+                Status = status;
+
+            CommandManager.InvalidateRequerySuggested();
+        });
+    }
+
+    private void OnDisconnected()
+    {
+        App.Current.Dispatcher.Invoke(() =>
+        {
+            Status = TestStationStatus.Disconnected;
+        });
+    }
+
+    private async Task GetStatus()
+    {
+        await _connection.SendAsync(Commands.Status);
     }
 
     public event PropertyChangedEventHandler? PropertyChanged;
