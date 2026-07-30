@@ -1,68 +1,112 @@
 ﻿using System.IO.Pipes;
+using System.Net;
+using System.Net.Sockets;
+using System.Text.RegularExpressions;
 using TestStation.Protocol;
 
 const int RunDurationMinMs = 1000;
 const int RunDurationMaxMs = 10000;
 
-string pipeName = args.Length > 0 ? args[0] : "Station1";
+string endpoint = args.Length > 0 ? args[0] : "Station1";
 
-Console.WriteLine($"[{pipeName}] Starting. Waiting for a connection...");
+// Decide transport the same way the client factory does: ip:port -> TCP, else -> pipe.
+var ipPort = new Regex(@"^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3}):(\d{1,5})$");
 
-using var server = new NamedPipeServerStream(
-    pipeName,
-    PipeDirection.InOut,
-    maxNumberOfServerInstances: 1,
-    PipeTransmissionMode.Byte,
-    PipeOptions.Asynchronous);
+Console.WriteLine($"[{endpoint}] Starting. Waiting for a connection...");
 
-await server.WaitForConnectionAsync();
-Console.WriteLine($"[{pipeName}] Client connected.");
+// Get a connected Stream from whichever transport, then run the shared loop.
+Stream stream = ipPort.IsMatch(endpoint)
+    ? await AcceptTcpAsync(endpoint)
+    : await AcceptPipeAsync(endpoint);
 
-using var reader = new StreamReader(server);
-using var writer = new StreamWriter(server) { AutoFlush = true };
+Console.WriteLine($"[{endpoint}] Client connected.");
 
-var status = TestStationStatus.Idle;
+await RunStationLoopAsync(stream, endpoint);
 
-try
+
+// ---- transport-specific setup ----
+
+static async Task<Stream> AcceptPipeAsync(string pipeName)
 {
-    string? line;
-    while ((line = await reader.ReadLineAsync()) != null)
+    var server = new NamedPipeServerStream(
+        pipeName,
+        PipeDirection.InOut,
+        maxNumberOfServerInstances: 1,
+        PipeTransmissionMode.Byte,
+        PipeOptions.Asynchronous);
+
+    await server.WaitForConnectionAsync();
+    return server;  // NamedPipeServerStream IS a Stream
+}
+
+static async Task<Stream> AcceptTcpAsync(string endpoint)
+{
+    var parts = endpoint.Split(':');
+    string host = parts[0];
+    int port = int.Parse(parts[1]);
+
+    // Listen on the given address/port and accept one client.
+    var listener = new TcpListener(IPAddress.Parse(host), port);
+    listener.Start();
+
+    TcpClient client = await listener.AcceptTcpClientAsync();
+    listener.Stop();               // we only serve one connection
+
+    return client.GetStream();     // NetworkStream IS a Stream
+}
+
+
+// ---- transport-agnostic command loop (unchanged logic) ----
+
+static async Task RunStationLoopAsync(Stream stream, string name)
+{
+    using var reader = new StreamReader(stream);
+    using var writer = new StreamWriter(stream) { AutoFlush = true };
+
+    var status = TestStationStatus.Idle;
+
+    try
     {
-        string command = line.Trim().ToUpperInvariant();
-        Console.WriteLine($"[{pipeName}] Received: {command}");
-
-        switch (command)
+        string? line;
+        while ((line = await reader.ReadLineAsync()) != null)
         {
-            case Commands.Run:
-                status = TestStationStatus.Running;
-                await writer.WriteLineAsync(status.ToString());
+            string command = line.Trim().ToUpperInvariant();
+            Console.WriteLine($"[{name}] Received: {command}");
 
-                await Task.Delay(Random.Shared.Next(RunDurationMinMs, RunDurationMaxMs));
+            switch (command)
+            {
+                case Commands.Run:
+                    status = TestStationStatus.Running;
+                    await writer.WriteLineAsync(status.ToString());
 
-                status = Random.Shared.Next(2) == 0
-                    ? TestStationStatus.Passed
-                    : TestStationStatus.Failed;
+                    await Task.Delay(Random.Shared.Next(RunDurationMinMs, RunDurationMaxMs));
 
-                await writer.WriteLineAsync(status.ToString());
-                break;
+                    status = Random.Shared.Next(2) == 0
+                        ? TestStationStatus.Passed
+                        : TestStationStatus.Failed;
 
-            case Commands.Status:
-                await writer.WriteLineAsync(status.ToString());
-                break;
+                    await writer.WriteLineAsync(status.ToString());
+                    break;
 
-            default:
-                await writer.WriteLineAsync($"UNKNOWN: {command}");
-                break;
+                case Commands.Status:
+                    await writer.WriteLineAsync(status.ToString());
+                    break;
+
+                default:
+                    await writer.WriteLineAsync($"UNKNOWN: {command}");
+                    break;
+            }
         }
-    }  
-}
-catch (IOException ex)
-{
-    Console.WriteLine($"[{pipeName}] Connection lost: {ex.Message}");
-}
-finally
-{
-    try { writer.Dispose(); } catch (IOException) { }
-    reader.Dispose();
-    Console.WriteLine($"[{pipeName}] Client disconnected.");
+    }
+    catch (IOException ex)
+    {
+        Console.WriteLine($"[{name}] Connection lost: {ex.Message}");
+    }
+    finally
+    {
+        try { writer.Dispose(); } catch (IOException) { }
+        reader.Dispose();
+        stream.Dispose();
+        Console.WriteLine($"[{name}] Client disconnected.");
+    }
 }

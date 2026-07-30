@@ -8,6 +8,8 @@ namespace TestStationMonitor;
 
 public class MainViewModel : INotifyPropertyChanged
 {
+    private IConnectionFactory _connectionFactory = new ConnectionFactory();
+
     private string _statusMessage;
     public string StatusMessage
     {
@@ -65,7 +67,7 @@ public class MainViewModel : INotifyPropertyChanged
             return;
         }
 
-        IConnection connection = new PipesConnection();
+        IConnection connection = _connectionFactory.Create(endpoint);
         bool connected = await connection.ConnectAsync(endpoint);
         if (!connected)
         {
